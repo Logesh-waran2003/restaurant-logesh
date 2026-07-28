@@ -1,0 +1,17 @@
+{
+  "name": "restaurant-logesh",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @restaurant/db generate",
+    "db:push": "pnpm --filter @restaurant/db push",
+    "db:migrate": "pnpm --filter @restaurant/db migrate"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
