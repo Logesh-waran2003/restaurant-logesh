@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingBag, Clock, Check, Printer, XCircle, ChevronDown } from 'lucide-react'
+import { ShoppingBag, Clock, Check, Printer, XCircle, ChevronDown, UtensilsCrossed, Package } from 'lucide-react'
 import { api } from '@/lib/api'
 
 interface OrderItem {
@@ -13,23 +13,21 @@ interface OrderItem {
 interface Order {
   id: string
   orderNumber: string
-  tableId: string
+  orderType: 'DINE_IN' | 'PARCEL' | 'DELIVERY'
+  tokenNumber?: string
+  customerName?: string
+  customerPhone?: string
+  tableId?: string
   status: string
   total: number
+  packingCharge?: number
   paymentMethod: string
   paymentStatus: string
   createdAt: string
   items: OrderItem[]
 }
 
-type FilterTab = 'ALL' | 'ACTIVE' | 'READY' | 'COMPLETED'
-
-const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: 'ALL', label: 'All' },
-  { key: 'ACTIVE', label: 'Active' },
-  { key: 'READY', label: 'Ready' },
-  { key: 'COMPLETED', label: 'Completed' },
-]
+type OrderTab = 'DINE_IN' | 'PARCEL'
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   PLACED: { bg: 'rgba(255, 138, 0, 0.15)', text: '#FF8A00' },
@@ -48,7 +46,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export function OrdersPage() {
-  const [filter, setFilter] = useState<FilterTab>('ALL')
+  const [tab, setTab] = useState<OrderTab>('DINE_IN')
   const [expanded, setExpanded] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -69,47 +67,65 @@ export function OrdersPage() {
   })
 
   const filtered = orders.filter((o) => {
-    switch (filter) {
-      case 'ACTIVE':
-        return ['PLACED', 'PREPARING'].includes(o.status)
-      case 'READY':
-        return o.status === 'READY'
-      case 'COMPLETED':
-        return ['SERVED', 'PICKED_UP', 'CANCELLED'].includes(o.status)
-      default:
-        return true
-    }
+    if (tab === 'DINE_IN') return o.orderType === 'DINE_IN'
+    return o.orderType === 'PARCEL' || o.orderType === 'DELIVERY'
   })
+
+  const dineInCount = orders.filter((o) => o.orderType === 'DINE_IN').length
+  const parcelCount = orders.filter((o) => o.orderType === 'PARCEL' || o.orderType === 'DELIVERY').length
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
-          Live Orders
+          Active Orders
         </h1>
         <span className="text-xs" style={{ color: '#9CA3AF' }}>
           Auto-refreshes every 10s
         </span>
       </div>
 
-      {/* Filter tabs */}
+      {/* Order type tabs */}
       <div className="flex gap-2">
-        {FILTER_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className="px-5 py-2.5 text-sm font-semibold transition-all"
-            style={{
-              borderRadius: '20px',
-              backgroundColor: filter === tab.key ? '#FF8A00' : '#111827',
-              color: filter === tab.key ? '#F9FAFB' : '#9CA3AF',
-              border: filter === tab.key ? 'none' : '1px solid rgba(255,255,255,0.08)',
-            }}
+        <button
+          onClick={() => setTab('DINE_IN')}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-all"
+          style={{
+            borderRadius: '20px',
+            backgroundColor: tab === 'DINE_IN' ? 'rgba(34, 197, 94, 0.15)' : '#111827',
+            color: tab === 'DINE_IN' ? '#22C55E' : '#9CA3AF',
+            border: tab === 'DINE_IN' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          <UtensilsCrossed className="w-4 h-4" />
+          Dine-In
+          <span
+            className="ml-1 px-2 py-0.5 text-xs rounded-full"
+            style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'inherit' }}
           >
-            {tab.label}
-          </button>
-        ))}
+            {dineInCount}
+          </span>
+        </button>
+        <button
+          onClick={() => setTab('PARCEL')}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-all"
+          style={{
+            borderRadius: '20px',
+            backgroundColor: tab === 'PARCEL' ? 'rgba(255, 138, 0, 0.15)' : '#111827',
+            color: tab === 'PARCEL' ? '#FF8A00' : '#9CA3AF',
+            border: tab === 'PARCEL' ? '1px solid rgba(255, 138, 0, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          <Package className="w-4 h-4" />
+          Parcel / Takeaway
+          <span
+            className="ml-1 px-2 py-0.5 text-xs rounded-full"
+            style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'inherit' }}
+          >
+            {parcelCount}
+          </span>
+        </button>
       </div>
 
       {/* Orders grid */}
@@ -126,7 +142,7 @@ export function OrdersPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
           <ShoppingBag className="w-12 h-12 mx-auto mb-4" style={{ color: '#9CA3AF', opacity: 0.5 }} />
-          <p style={{ color: '#9CA3AF' }}>No orders matching this filter</p>
+          <p style={{ color: '#9CA3AF' }}>No {tab === 'DINE_IN' ? 'dine-in' : 'parcel'} orders right now</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -162,6 +178,7 @@ function OrderCard({
   onCancel: () => void
 }) {
   const statusStyle = STATUS_COLORS[order.status] || STATUS_COLORS.PLACED
+  const isParcel = order.orderType === 'PARCEL' || order.orderType === 'DELIVERY'
 
   return (
     <motion.div
@@ -178,11 +195,23 @@ function OrderCard({
         borderColor: 'rgba(255,255,255,0.05)',
       }}
     >
-      {/* Top row: order number + status */}
+      {/* Top row: order number + type badge + status */}
       <div className="flex items-start justify-between mb-3">
-        <span className="text-lg font-bold" style={{ color: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
-          #{order.orderNumber}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-bold" style={{ color: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
+            #{order.orderNumber}
+          </span>
+          <span
+            className="px-2 py-0.5 text-[10px] font-bold uppercase"
+            style={{
+              borderRadius: '6px',
+              backgroundColor: isParcel ? 'rgba(255, 138, 0, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+              color: isParcel ? '#FF8A00' : '#22C55E',
+            }}
+          >
+            {isParcel ? 'Parcel' : 'Dine-In'}
+          </span>
+        </div>
         <span
           className="px-2.5 py-1 text-xs font-semibold"
           style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderRadius: '8px' }}
@@ -191,9 +220,16 @@ function OrderCard({
         </span>
       </div>
 
-      {/* Details */}
+      {/* Table or customer info */}
       <div className="flex items-center gap-3 text-sm mb-2" style={{ color: '#9CA3AF' }}>
-        <span>Table {order.tableId}</span>
+        {isParcel ? (
+          <>
+            {order.tokenNumber && <span className="font-mono font-semibold" style={{ color: '#FF8A00' }}>{order.tokenNumber}</span>}
+            <span>{order.customerName || 'Walk-in'}</span>
+          </>
+        ) : (
+          <span>Table {order.tableId}</span>
+        )}
         <span>{order.items.length} items</span>
       </div>
 
@@ -240,6 +276,14 @@ function OrderCard({
                 ))}
               </div>
 
+              {/* Packing charge for parcel */}
+              {isParcel && order.packingCharge && Number(order.packingCharge) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span style={{ color: '#9CA3AF' }}>Packing Charge</span>
+                  <span style={{ color: '#9CA3AF' }}>₹{order.packingCharge}</span>
+                </div>
+              )}
+
               {/* Payment status */}
               <div className="flex items-center gap-2 text-sm">
                 <span style={{ color: '#9CA3AF' }}>Payment:</span>
@@ -250,6 +294,13 @@ function OrderCard({
                   <span style={{ color: '#9CA3AF' }}>({order.paymentMethod})</span>
                 )}
               </div>
+
+              {/* Customer details for parcel */}
+              {isParcel && order.customerPhone && (
+                <div className="text-sm" style={{ color: '#9CA3AF' }}>
+                  Phone: {order.customerPhone}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-2 pt-2">

@@ -8,6 +8,7 @@ import { CartPage } from './pages/customer/CartPage'
 import { OrderStatusPage } from './pages/customer/OrderStatusPage'
 import { KDSPage } from './pages/kds/KDSPage'
 import { OrdersPage } from './pages/pos/OrdersPage'
+import { NewOrderPage } from './pages/pos/NewOrderPage'
 import { DashboardPage } from './pages/admin/DashboardPage'
 import { MenuManagementPage } from './pages/admin/MenuManagementPage'
 import { TablesPage } from './pages/admin/TablesPage'
@@ -58,6 +59,8 @@ export default function App() {
       >
         <Route index element={<OrdersPage />} />
         <Route path="orders" element={<OrdersPage />} />
+        <Route path="new" element={<NewOrderPage />} />
+        <Route path="tables" element={<div className="text-center py-20" style={{ color: '#9CA3AF' }}>Tables view coming soon</div>} />
       </Route>
 
       {/* Admin Dashboard */}

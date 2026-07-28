@@ -1,11 +1,11 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { ShoppingBag, TableProperties, UtensilsCrossed, LogOut, User } from 'lucide-react'
+import { ClipboardList, PlusCircle, TableProperties, LogOut, User } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 
 const navItems = [
-  { to: '/pos/orders', label: 'Orders', icon: ShoppingBag },
-  { to: '/pos/tables', label: 'Tables', icon: TableProperties },
-  { to: '/pos/menu', label: 'Menu', icon: UtensilsCrossed },
+  { to: '/pos', label: 'Orders', icon: ClipboardList, end: true },
+  { to: '/pos/new', label: 'New Order', icon: PlusCircle, end: false },
+  { to: '/pos/tables', label: 'Tables', icon: TableProperties, end: false },
 ]
 
 export function POSLayout() {
@@ -20,22 +20,20 @@ export function POSLayout() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: '#09090B' }}>
-      {/* Top nav — horizontal, large touch targets for cashier */}
       <header
         className="flex items-center justify-between px-6 shrink-0"
         style={{ backgroundColor: '#111827', borderBottom: '1px solid rgba(255,255,255,0.05)', height: '64px' }}
       >
-        {/* Logo */}
         <span className="text-lg font-bold" style={{ color: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
           POS
         </span>
 
-        {/* Nav tabs — centered */}
         <nav className="flex items-center gap-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.end}
               className="relative flex items-center gap-2 px-5 font-medium text-sm transition-colors"
               style={({ isActive }) => ({
                 minHeight: '48px',
@@ -59,7 +57,6 @@ export function POSLayout() {
           ))}
         </nav>
 
-        {/* User + logout */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <User className="w-4 h-4" style={{ color: '#9CA3AF' }} />
@@ -78,7 +75,6 @@ export function POSLayout() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto p-6">
         <Outlet />
       </main>

@@ -69,6 +69,12 @@ enum KOTStatus {
   READY
 }
 
+enum OrderType {
+  DINE_IN
+  PARCEL
+  DELIVERY
+}
+
 enum NotificationType {
   ORDER_READY
   ASSISTANCE
@@ -286,22 +292,28 @@ model Customer {
 model Order {
   id             String         @id @default(uuid())
   orderNumber    Int            @default(autoincrement()) @map("order_number")
-  tableSessionId String         @map("table_session_id")
+  orderType      OrderType      @default(DINE_IN) @map("order_type")
+  tableSessionId String?        @map("table_session_id")
   customerId     String?        @map("customer_id")
   status         OrderStatus    @default(PLACED)
   paymentStatus  PaymentStatus  @default(PENDING) @map("payment_status")
   paymentMethod  PaymentMethod? @map("payment_method")
+  tokenNumber    String?        @map("token_number") // For parcel orders (P-001, P-002)
+  customerName   String?        @map("customer_name")
+  customerPhone  String?        @map("customer_phone")
   subtotal       Decimal        @db.Decimal(10, 2)
+  packingCharge  Decimal        @default(0) @map("packing_charge") @db.Decimal(10, 2)
   gstAmount      Decimal        @default(0) @map("gst_amount") @db.Decimal(10, 2)
   serviceCharge  Decimal        @default(0) @map("service_charge") @db.Decimal(10, 2)
   discount       Decimal        @default(0) @db.Decimal(10, 2)
-  total          Decimal        @db.Decimal(10, 2)
+  total          Decimal        @db.Decimal(10, 2) // Includes subtotal + packingCharge + gstAmount + serviceCharge - discount
   notes          String?
+  scheduledAt    DateTime?      @map("scheduled_at")
   restaurantId   String         @map("restaurant_id")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
-  tableSession  TableSession   @relation(fields: [tableSessionId], references: [id])
+  tableSession  TableSession?  @relation(fields: [tableSessionId], references: [id])
   customer      Customer?      @relation(fields: [customerId], references: [id])
   restaurant    Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items         OrderItem[]

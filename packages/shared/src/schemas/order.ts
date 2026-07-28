@@ -1,10 +1,13 @@
 import { z } from 'zod';
 
 export const createOrderSchema = z.object({
+  orderType: z.enum(['DINE_IN', 'PARCEL', 'DELIVERY']).optional().default('DINE_IN'),
   tableSessionId: z.string().optional(),
   tableId: z.string().optional(),
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
+  packingCharge: z.number().optional().default(0),
+  scheduledAt: z.string().optional(),
   paymentMethod: z.enum(['UPI', 'CARD', 'CASH']).optional().default('CASH'),
   items: z.array(z.object({
     menuItemId: z.string(),

@@ -17,37 +17,59 @@ const router = Router();
 
 router.post('/', validate(createOrderSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { tableSessionId, tableId, items, paymentMethod, customerName, customerPhone } = req.body;
+    const { orderType = 'DINE_IN', tableSessionId, tableId, items, paymentMethod, customerName, customerPhone, packingCharge = 0, scheduledAt } = req.body;
 
-    // Find or create a table session
-    let session;
-    if (tableSessionId) {
-      session = await prisma.tableSession.findUnique({
-        where: { id: tableSessionId },
-        include: { table: true },
-      });
-    } else if (tableId) {
-      // Customer flow: find table by number (tableId = "table-3" format)
-      const tableNumber = parseInt(tableId.replace('table-', ''), 10);
-      const table = await prisma.table.findFirst({
-        where: { number: tableNumber },
-      });
-      if (!table) throw new AppError('Table not found', 404);
+    let session: any = null;
+    let restaurantId: string;
+    let tokenNumber: string | null = null;
 
-      // Find or create an open session
-      session = await prisma.tableSession.findFirst({
-        where: { tableId: table.id, status: { not: 'CLOSED' } },
-        include: { table: true },
-      });
-      if (!session) {
-        session = await prisma.tableSession.create({
-          data: { tableId: table.id, status: 'OCCUPIED' },
+    if (orderType === 'DINE_IN') {
+      // ── Dine-in: find or create table session (existing logic) ──
+      if (tableSessionId) {
+        session = await prisma.tableSession.findUnique({
+          where: { id: tableSessionId },
           include: { table: true },
         });
+      } else if (tableId) {
+        const tableNumber = parseInt(tableId.replace('table-', ''), 10);
+        const table = await prisma.table.findFirst({
+          where: { number: tableNumber },
+        });
+        if (!table) throw new AppError('Table not found', 404);
+
+        session = await prisma.tableSession.findFirst({
+          where: { tableId: table.id, status: { not: 'CLOSED' } },
+          include: { table: true },
+        });
+        if (!session) {
+          session = await prisma.tableSession.create({
+            data: { tableId: table.id, status: 'OCCUPIED' },
+            include: { table: true },
+          });
+        }
+      }
+      if (!session) throw new AppError('Table session required for dine-in orders', 400);
+      restaurantId = session.table.restaurantId;
+    } else {
+      // ── Parcel / Delivery: no table needed ──
+      // Get restaurantId from first menu item
+      const firstMenuItem = await prisma.menuItem.findUnique({
+        where: { id: items[0].menuItemId },
+        include: { category: true },
+      });
+      if (!firstMenuItem) throw new AppError('Menu item not found', 400);
+      restaurantId = firstMenuItem.category.restaurantId;
+
+      // Generate token number for parcel: P-001, P-002 etc.
+      if (orderType === 'PARCEL') {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const parcelCount = await prisma.order.count({
+          where: { orderType: 'PARCEL', createdAt: { gte: todayStart }, restaurantId },
+        });
+        tokenNumber = `P-${String(parcelCount + 1).padStart(3, '0')}`;
       }
     }
-
-    if (!session) throw new AppError('Table session required', 400);
 
     const menuItemIds = items.map((i: any) => i.menuItemId);
     const menuItems = await prisma.menuItem.findMany({
@@ -55,9 +77,6 @@ router.post('/', validate(createOrderSchema), async (req: Request, res: Response
       include: { variants: true, addonGroups: { include: { addons: true } } },
     });
     const menuMap = new Map(menuItems.map((m) => [m.id, m]));
-
-    // Get restaurant ID from the table
-    const restaurantId = session.table.restaurantId;
 
     let subtotal = new Prisma.Decimal(0);
     const orderItemsData = items.map((item: any) => {
@@ -98,13 +117,20 @@ router.post('/', validate(createOrderSchema), async (req: Request, res: Response
       };
     });
 
+    const packingChargeDecimal = new Prisma.Decimal(packingCharge);
     const gstAmount = subtotal.mul(DEFAULT_GST_PERCENT).div(100);
-    const total = subtotal.add(gstAmount);
+    const total = subtotal.add(gstAmount).add(packingChargeDecimal);
 
     const order = await prisma.order.create({
       data: {
-        tableSessionId: session.id,
+        tableSessionId: session?.id || null,
         restaurantId,
+        orderType: orderType as any,
+        tokenNumber,
+        customerName: customerName || null,
+        customerPhone: customerPhone || null,
+        packingCharge: packingChargeDecimal,
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         paymentMethod: paymentMethod || 'CASH',
         notes: customerName ? `${customerName} | ${customerPhone || ''}` : undefined,
         subtotal,
@@ -115,16 +141,31 @@ router.post('/', validate(createOrderSchema), async (req: Request, res: Response
       include: { items: { include: { menuItem: true, addons: true } } },
     });
 
-    io.to('kitchen').to('admin').to(`table-${session.table.id}`).emit('orderPlaced', {
-      orderId: order.id,
-      tableId: session.table.id,
-      tableNumber: session.table.number,
-      items: (order as any).items.map((i: any) => ({ name: i.menuItem.name, quantity: i.quantity })),
-      createdAt: order.createdAt.toISOString(),
-    });
-    io.to('kitchen').emit('newOrderBeep', { orderId: order.id, tableNumber: session.table.number });
+    // ── Socket emissions ──
+    if (orderType === 'DINE_IN' && session) {
+      io.to('kitchen').to('admin').to(`table-${session.table.id}`).emit('orderPlaced', {
+        orderId: order.id,
+        orderType,
+        tableId: session.table.id,
+        tableNumber: session.table.number,
+        items: (order as any).items.map((i: any) => ({ name: i.menuItem.name, quantity: i.quantity })),
+        createdAt: order.createdAt.toISOString(),
+      });
+      io.to('kitchen').emit('newOrderBeep', { orderId: order.id, tableNumber: session.table.number });
+    } else {
+      // Parcel / Delivery
+      io.to('kitchen').to('admin').emit('orderPlaced', {
+        orderId: order.id,
+        orderType,
+        tokenNumber,
+        customerName: customerName || null,
+        items: (order as any).items.map((i: any) => ({ name: i.menuItem.name, quantity: i.quantity })),
+        createdAt: order.createdAt.toISOString(),
+      });
+      io.to('kitchen').emit('newOrderBeep', { orderId: order.id, tokenNumber });
+    }
 
-    res.status(201).json(order);
+    res.status(201).json({ ...order, orderType, tokenNumber, customerName: customerName || null });
   } catch (e) { next(e); }
 });
 
@@ -180,11 +221,17 @@ router.patch('/:id/status', authenticate, requireRole('owner', 'manager', 'chef'
       include: { items: { include: { menuItem: true } }, tableSession: { include: { table: true } } },
     });
 
-    io.to('kitchen').to('admin').to(`table-${order.tableSession.table.id}`).emit('orderStatusChanged', {
+    const statusPayload = {
       orderId: order.id,
       status: order.status,
       updatedBy: req.user!.userId,
-    });
+    };
+
+    if (order.tableSession?.table) {
+      io.to('kitchen').to('admin').to(`table-${order.tableSession.table.id}`).emit('orderStatusChanged', statusPayload);
+    } else {
+      io.to('kitchen').to('admin').emit('orderStatusChanged', { ...statusPayload, tokenNumber: order.tokenNumber });
+    }
 
     // Create KOT when confirmed
     if (status.toUpperCase() === 'CONFIRMED') {

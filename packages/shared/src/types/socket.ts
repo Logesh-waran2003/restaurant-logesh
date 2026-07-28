@@ -1,7 +1,10 @@
 export interface OrderPlacedPayload {
   orderId: string;
-  tableId: string;
-  tableNumber: number;
+  orderType?: string;
+  tableId?: string;
+  tableNumber?: number;
+  tokenNumber?: string | null;
+  customerName?: string | null;
   items: { name: string; quantity: number }[];
   createdAt: string;
 }
@@ -10,6 +13,7 @@ export interface OrderStatusChangedPayload {
   orderId: string;
   status: string;
   updatedBy: string;
+  tokenNumber?: string | null;
 }
 
 export interface KotUpdatePayload {
@@ -39,7 +43,8 @@ export interface NotificationPayload {
 
 export interface NewOrderBeepPayload {
   orderId: string;
-  tableNumber: number;
+  tableNumber?: number;
+  tokenNumber?: string | null;
 }
 
 export interface ServerToClientEvents {
