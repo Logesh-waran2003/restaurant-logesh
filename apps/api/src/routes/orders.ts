@@ -15,15 +15,39 @@ const router = Router();
 
 // ─── Create Order ───────────────────────────────────────────────────────────
 
-router.post('/', authenticate, validate(createOrderSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', validate(createOrderSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { tableSessionId, items } = req.body;
+    const { tableSessionId, tableId, items, paymentMethod, customerName, customerPhone } = req.body;
 
-    const session = await prisma.tableSession.findUnique({
-      where: { id: tableSessionId },
-      include: { table: true },
-    });
-    if (!session || session.status === 'CLOSED') throw new AppError('Invalid or closed table session', 400);
+    // Find or create a table session
+    let session;
+    if (tableSessionId) {
+      session = await prisma.tableSession.findUnique({
+        where: { id: tableSessionId },
+        include: { table: true },
+      });
+    } else if (tableId) {
+      // Customer flow: find table by number (tableId = "table-3" format)
+      const tableNumber = parseInt(tableId.replace('table-', ''), 10);
+      const table = await prisma.table.findFirst({
+        where: { number: tableNumber },
+      });
+      if (!table) throw new AppError('Table not found', 404);
+
+      // Find or create an open session
+      session = await prisma.tableSession.findFirst({
+        where: { tableId: table.id, status: { not: 'CLOSED' } },
+        include: { table: true },
+      });
+      if (!session) {
+        session = await prisma.tableSession.create({
+          data: { tableId: table.id, status: 'OCCUPIED' },
+          include: { table: true },
+        });
+      }
+    }
+
+    if (!session) throw new AppError('Table session required', 400);
 
     const menuItemIds = items.map((i: any) => i.menuItemId);
     const menuItems = await prisma.menuItem.findMany({
@@ -31,6 +55,9 @@ router.post('/', authenticate, validate(createOrderSchema), async (req: Request,
       include: { variants: true, addonGroups: { include: { addons: true } } },
     });
     const menuMap = new Map(menuItems.map((m) => [m.id, m]));
+
+    // Get restaurant ID from the table
+    const restaurantId = session.table.restaurantId;
 
     let subtotal = new Prisma.Decimal(0);
     const orderItemsData = items.map((item: any) => {
@@ -66,7 +93,7 @@ router.post('/', authenticate, validate(createOrderSchema), async (req: Request,
         unitPrice: unitPrice.add(addonTotal),
         totalPrice: totalItemPrice,
         spiceLevel: item.spiceLevel,
-        specialInstructions: item.specialInstructions,
+        specialInstructions: item.specialInstructions || item.instructions,
         addons: { create: addonConnects },
       };
     });
@@ -76,8 +103,10 @@ router.post('/', authenticate, validate(createOrderSchema), async (req: Request,
 
     const order = await prisma.order.create({
       data: {
-        tableSessionId,
-        restaurantId: req.user!.restaurantId,
+        tableSessionId: session.id,
+        restaurantId,
+        paymentMethod: paymentMethod || 'CASH',
+        notes: customerName ? `${customerName} | ${customerPhone || ''}` : undefined,
         subtotal,
         gstAmount,
         total,
@@ -90,7 +119,7 @@ router.post('/', authenticate, validate(createOrderSchema), async (req: Request,
       orderId: order.id,
       tableId: session.table.id,
       tableNumber: session.table.number,
-      items: order.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity })),
+      items: (order as any).items.map((i: any) => ({ name: i.menuItem.name, quantity: i.quantity })),
       createdAt: order.createdAt.toISOString(),
     });
     io.to('kitchen').emit('newOrderBeep', { orderId: order.id, tableNumber: session.table.number });
@@ -124,7 +153,7 @@ router.get('/', authenticate, async (req: Request, res: Response, next: NextFunc
 
 // ─── Get Order ──────────────────────────────────────────────────────────────
 
-router.get('/:id', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },

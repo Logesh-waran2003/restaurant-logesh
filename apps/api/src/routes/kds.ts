@@ -6,70 +6,102 @@ import { io } from '../index';
 
 const router = Router();
 
-// ─── Active KOTs by department ──────────────────────────────────────────────
+// ─── Active orders for kitchen display ──────────────────────────────────────
 
 router.get('/orders', authenticate, requireRole('owner', 'manager', 'chef'), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const department = req.query.department as string | undefined;
-    const where: any = { status: { not: 'READY' } };
-    if (department) where.department = department.toUpperCase();
-
-    const kots = await prisma.kOT.findMany({
-      where,
+    const orders = await prisma.order.findMany({
+      where: {
+        status: { in: ['PLACED', 'CONFIRMED', 'PREPARING', 'READY'] },
+      },
       orderBy: { createdAt: 'asc' },
       include: {
         items: { include: { menuItem: true } },
-        order: { include: { tableSession: { include: { table: true } } } },
+        tableSession: { include: { table: true } },
       },
     });
-    res.json(kots);
+
+    // Map to a format the KDS frontend expects
+    const kdsOrders = orders.map((order) => ({
+      id: order.id,
+      orderNumber: String(order.orderNumber),
+      status: order.status === 'PLACED' || order.status === 'CONFIRMED' ? 'NEW' : order.status,
+      tableNumber: order.tableSession?.table?.number ?? 0,
+      tableId: String(order.tableSession?.table?.number ?? 0),
+      tableName: order.tableSession?.table?.name ?? '',
+      notes: order.notes,
+      items: order.items.map((item) => ({
+        id: item.id,
+        name: item.menuItem.name,
+        quantity: item.quantity,
+        spiceLevel: item.spiceLevel,
+        specialInstructions: item.specialInstructions,
+        status: item.status,
+      })),
+      createdAt: order.createdAt.toISOString(),
+    }));
+
+    res.json(kdsOrders);
   } catch (e) { next(e); }
 });
 
-// ─── Update KOT Status ──────────────────────────────────────────────────────
+// ─── Update order status from KDS ───────────────────────────────────────────
 
-router.patch('/kot/:id/status', authenticate, requireRole('owner', 'manager', 'chef'), async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/orders/:id/status', authenticate, requireRole('owner', 'manager', 'chef'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status } = req.body;
     if (!status) throw new AppError('status is required', 400);
 
-    const kot: any = await prisma.kOT.update({
+    const validStatuses = ['PLACED', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED'];
+    if (!validStatuses.includes(status.toUpperCase())) {
+      throw new AppError(`Invalid status: ${status}`, 400);
+    }
+
+    const order = await prisma.order.update({
       where: { id: req.params.id },
-      data: { status: status.toUpperCase() },
+      data: { status: status.toUpperCase() as any },
       include: {
         items: { include: { menuItem: true } },
-        order: { include: { kots: true, tableSession: { include: { table: true } } } },
+        tableSession: { include: { table: true } },
       },
     });
 
-    io.to('kitchen').to('admin').emit('kotUpdate', {
-      kotId: kot.id,
-      orderId: kot.orderId,
-      department: kot.department,
-      items: kot.items.map((i: any) => ({ name: i.menuItem.name, quantity: i.quantity, status: i.status })),
+    const tableNumber = order.tableSession?.table?.number ?? 0;
+
+    // Emit status change to all relevant rooms
+    (io as any).to('kitchen').to('admin').emit('orderStatusChanged', {
+      orderId: order.id,
+      status: order.status,
+      tableNumber,
     });
 
-    // If all KOTs for this order are READY, notify
+    // If READY, notify customer
     if (status.toUpperCase() === 'READY') {
-      const allReady = kot.order.kots.every((k: any) => k.id === kot.id ? true : k.status === 'READY');
-      if (allReady) {
-        const tableId = kot.order.tableSession.table.id;
-        io.to('admin').to(`table-${tableId}`).emit('notification', {
-          id: kot.id,
-          title: 'Order Ready',
-          message: `Order #${kot.order.orderNumber} is ready to serve`,
+      const tableId = order.tableSession?.table?.id;
+      if (tableId) {
+        (io as any).to(`table-${tableId}`).emit('order:status', {
+          orderId: order.id,
+          status: 'READY',
+        });
+        (io as any).to(`table-${tableId}`).emit('notification', {
+          id: order.id,
+          title: 'Order Ready!',
+          message: `Order #${order.orderNumber} is ready for pickup`,
           type: 'success',
         });
-        io.to('admin').to(`table-${tableId}`).emit('orderStatusChanged', {
-          orderId: kot.orderId,
-          status: 'READY',
-          updatedBy: req.user!.userId,
-        });
-        await prisma.order.update({ where: { id: kot.orderId }, data: { status: 'READY' } });
       }
     }
 
-    res.json(kot);
+    res.json({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status: order.status,
+      tableNumber,
+      items: order.items.map((item) => ({
+        name: item.menuItem.name,
+        quantity: item.quantity,
+      })),
+    });
   } catch (e) { next(e); }
 });
 

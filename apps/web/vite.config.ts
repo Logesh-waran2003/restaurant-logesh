@@ -11,6 +11,9 @@ export default defineConfig({
     },
   },
   server: {
+    fs: {
+      allow: [path.resolve(__dirname, '../..')],
+    },
     proxy: {
       '/api': 'http://localhost:4000',
       '/socket.io': {

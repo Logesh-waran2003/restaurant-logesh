@@ -1,13 +1,18 @@
 import { z } from 'zod';
 
 export const createOrderSchema = z.object({
-  tableSessionId: z.string(),
+  tableSessionId: z.string().optional(),
+  tableId: z.string().optional(),
+  customerName: z.string().optional(),
+  customerPhone: z.string().optional(),
+  paymentMethod: z.enum(['UPI', 'CARD', 'CASH']).optional().default('CASH'),
   items: z.array(z.object({
     menuItemId: z.string(),
     variantId: z.string().optional(),
     quantity: z.number().int().positive(),
     spiceLevel: z.number().int().min(1).max(5).optional(),
     specialInstructions: z.string().optional(),
+    instructions: z.string().optional(),
     addonIds: z.array(z.string()).optional(),
   })).min(1),
 });

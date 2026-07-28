@@ -9,13 +9,19 @@ import { OrderStatusPage } from './pages/customer/OrderStatusPage'
 import { KDSPage } from './pages/kds/KDSPage'
 import { OrdersPage } from './pages/pos/OrdersPage'
 import { DashboardPage } from './pages/admin/DashboardPage'
+import { MenuManagementPage } from './pages/admin/MenuManagementPage'
+import { TablesPage } from './pages/admin/TablesPage'
+import { AdminOrdersPage } from './pages/admin/AdminOrdersPage'
+import { StaffPage } from './pages/admin/StaffPage'
+import { ReportsPage } from './pages/admin/ReportsPage'
+import { SettingsPage } from './pages/admin/SettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { useAuthStore } from './lib/store'
 
 function RequireRole({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
   if (!user) return <Navigate to="/login" replace />
-  if (!roles.includes(user.role)) return <Navigate to="/login" replace />
+  if (!roles.map(r => r.toUpperCase()).includes(user.role.toUpperCase())) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
@@ -43,7 +49,7 @@ export default function App() {
 
       {/* POS / Cashier */}
       <Route
-        path="/pos"
+        path="/pos/*"
         element={
           <RequireRole roles={['CASHIER', 'MANAGER', 'ADMIN', 'OWNER']}>
             <POSLayout />
@@ -56,7 +62,7 @@ export default function App() {
 
       {/* Admin Dashboard */}
       <Route
-        path="/admin"
+        path="/admin/*"
         element={
           <RequireRole roles={['ADMIN', 'OWNER']}>
             <AdminLayout />
@@ -64,6 +70,12 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="menu" element={<MenuManagementPage />} />
+        <Route path="tables" element={<TablesPage />} />
+        <Route path="orders" element={<AdminOrdersPage />} />
+        <Route path="staff" element={<StaffPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Login */}

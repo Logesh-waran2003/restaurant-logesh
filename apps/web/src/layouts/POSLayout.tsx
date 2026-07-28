@@ -1,47 +1,82 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { ShoppingBag, TableProperties, UtensilsCrossed, LogOut, User } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 
 const navItems = [
-  { to: '/pos/orders', label: 'Orders', icon: '📋' },
-  { to: '/pos/tables', label: 'Tables', icon: '🪑' },
-  { to: '/pos/menu', label: 'Menu', icon: '🍽️' },
-  { to: '/pos/reports', label: 'Reports', icon: '📊' },
+  { to: '/pos/orders', label: 'Orders', icon: ShoppingBag },
+  { to: '/pos/tables', label: 'Tables', icon: TableProperties },
+  { to: '/pos/menu', label: 'Menu', icon: UtensilsCrossed },
 ]
 
 export function POSLayout() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   return (
-    <div className="h-screen flex bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-60 bg-navy text-white flex flex-col">
-        <div className="p-4 border-b border-white/10">
-          <h1 className="font-bold text-lg">💰 POS</h1>
-          <p className="text-xs text-white/60 mt-1">{user?.name}</p>
-        </div>
-        <nav className="flex-1 p-3 space-y-1">
+    <div className="h-screen flex flex-col" style={{ backgroundColor: '#09090B' }}>
+      {/* Top nav — horizontal, large touch targets for cashier */}
+      <header
+        className="flex items-center justify-between px-6 shrink-0"
+        style={{ backgroundColor: '#111827', borderBottom: '1px solid rgba(255,255,255,0.05)', height: '64px' }}
+      >
+        {/* Logo */}
+        <span className="text-lg font-bold" style={{ color: '#F9FAFB', fontFamily: 'Inter, sans-serif' }}>
+          POS
+        </span>
+
+        {/* Nav tabs — centered */}
+        <nav className="flex items-center gap-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive ? 'bg-accent text-white' : 'text-white/70 hover:bg-white/10'
-                }`
-              }
+              className="relative flex items-center gap-2 px-5 font-medium text-sm transition-colors"
+              style={({ isActive }) => ({
+                minHeight: '48px',
+                color: isActive ? '#FF8A00' : '#9CA3AF',
+                fontFamily: 'Inter, sans-serif',
+              })}
             >
-              <span>{item.icon}</span>
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <item.icon className="w-4.5 h-4.5" />
+                  <span>{item.label}</span>
+                  {isActive && (
+                    <span
+                      className="absolute bottom-0 left-3 right-3"
+                      style={{ height: '2px', backgroundColor: '#FF8A00', borderRadius: '1px' }}
+                    />
+                  )}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-white/10">
-          <button onClick={logout} className="text-sm text-white/60 hover:text-white">
+
+        {/* User + logout */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4" style={{ color: '#9CA3AF' }} />
+            <span className="text-sm" style={{ color: '#9CA3AF' }}>
+              {user?.name}
+            </span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 text-sm font-medium transition-colors hover:opacity-80"
+            style={{ minHeight: '48px', color: '#EF4444' }}
+          >
+            <LogOut className="w-4 h-4" />
             Logout
           </button>
         </div>
-      </aside>
+      </header>
 
       {/* Main content */}
       <main className="flex-1 overflow-auto p-6">

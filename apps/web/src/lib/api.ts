@@ -37,7 +37,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     } else {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
+      // Don't redirect customers to login - they don't have accounts
+      if (!window.location.pathname.startsWith('/order')) {
+        window.location.href = '/login'
+      }
       throw new Error('Unauthorized')
     }
   }

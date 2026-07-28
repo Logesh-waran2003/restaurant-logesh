@@ -3,7 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
+import { useAuthStore } from './lib/store'
 import './app.css'
+
+// Restore session from stored JWT on page load
+useAuthStore.getState().hydrate()
 
 const queryClient = new QueryClient({
   defaultOptions: {
