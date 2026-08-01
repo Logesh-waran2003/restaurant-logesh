@@ -29,7 +29,7 @@ services:
 
   api:
     build:
-      context: apps/api
+      context: backend
       dockerfile: Dockerfile
     ports:
       - "4000:4000"
@@ -40,15 +40,13 @@ services:
         condition: service_healthy
     env_file:
       - .env
-    volumes:
-      - ./apps/api/src:/app/src
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/restaurant
       - REDIS_URL=redis://redis:6379
 
   web:
     build:
-      context: apps/web
+      context: frontend
       dockerfile: Dockerfile
     ports:
       - "5173:80"
