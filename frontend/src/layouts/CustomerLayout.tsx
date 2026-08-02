@@ -1,12 +1,24 @@
 import { Outlet, useParams, Link, useLocation } from 'react-router-dom'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCartStore } from '@/lib/store'
-import { ShoppingBag, ArrowRight, Globe } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import { api } from '@/lib/api'
+
+interface TableInfo { id: string; number: number; name: string | null; section: string | null }
 
 export function CustomerLayout() {
   const { tableId } = useParams()
   const [lang, setLang] = useState<'EN' | 'TA'>('EN')
+
+  const { data: tableInfo } = useQuery<TableInfo>({
+    queryKey: ['table-info', tableId],
+    queryFn: () => api.get<TableInfo>(`/tables/public/${tableId}`),
+    enabled: !!tableId,
+  })
+
+  const tableLabel = tableInfo ? `Table ${tableInfo.number}` : 'Table'
   const items = useCartStore((s) => s.items)
   const total = useCartStore((s) => s.total)
   const location = useLocation()
@@ -31,7 +43,7 @@ export function CustomerLayout() {
           {/* Center: Table pill */}
           <div className="absolute left-1/2 -translate-x-1/2">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-600 border border-gray-200/60">
-              Table {tableId}
+              {tableLabel}
             </span>
           </div>
 

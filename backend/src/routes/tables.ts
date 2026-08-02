@@ -47,6 +47,19 @@ router.delete('/:id', authenticate, requireRole('owner', 'manager'), async (req:
   } catch (e) { next(e); }
 });
 
+// ─── Public table info by ID (no auth — for customer ordering page) ─────────
+
+router.get('/public/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const table = await prisma.table.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, number: true, name: true, section: true },
+    });
+    if (!table) throw new AppError('Table not found', 404);
+    res.json(table);
+  } catch (e) { next(e); }
+});
+
 // ─── QR Session lookup ──────────────────────────────────────────────────────
 
 router.get('/:qrCode/session', async (req: Request, res: Response, next: NextFunction) => {

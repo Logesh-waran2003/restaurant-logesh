@@ -7,7 +7,7 @@ import type { ServerToClientEvents, ClientToServerEvents, JoinRoomPayload, Leave
 export function initSocket(httpServer: HttpServer) {
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
     cors: { origin: process.env.CORS_ORIGIN?.split(',') ?? '*', credentials: true },
-  });
+  } as any);
 
   io.on('connection', (socket) => {
     socket.on('joinRoom', (payload: JoinRoomPayload) => {
